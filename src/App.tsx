@@ -29,6 +29,7 @@ import AccessRestrictedView from './components/common/AccessRestrictedView';
 import IamLoginPage from './components/auth/IamLoginPage';
 import AuditLogView from './components/audit/AuditLogView';
 import PwaInstallModal from './components/common/PwaInstallModal';
+import SupabaseConnectModal from './components/cloud/SupabaseConnectModal';
 import { ToastProvider, useToast } from './components/common/Toast';
 
 function CafeAppContent() {
@@ -57,6 +58,7 @@ function CafeAppContent() {
   const [currentTableNumber, setCurrentTableNumber] = useState<number>(1);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
 
   // Read URL query parameter "?table=X" on mount for direct table QR code scans
   useEffect(() => {
@@ -861,6 +863,7 @@ function CafeAppContent() {
         isSupabaseConnected={isSupabaseConnected}
         isSyncing={isSyncing}
         onManualSync={handleManualSync}
+        onOpenCloudModal={() => setIsCloudModalOpen(true)}
       />
 
       {/* Main Content Area with Strict IAM Policy Enforcement */}
@@ -1055,6 +1058,14 @@ function CafeAppContent() {
       <PwaInstallModal
         isOpen={isInstallModalOpen}
         onClose={() => setIsInstallModalOpen(false)}
+      />
+
+      {/* Supabase Cloud Connection Modal */}
+      <SupabaseConnectModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+        isSupabaseConnected={isSupabaseConnected}
+        onConnectionChanged={() => syncLiveSupabase(true)}
       />
     </div>
   );

@@ -43,6 +43,7 @@ interface Props {
   isSupabaseConnected?: boolean;
   isSyncing?: boolean;
   onManualSync?: () => void;
+  onOpenCloudModal?: () => void;
 }
 
 export default function Sidebar({
@@ -58,6 +59,7 @@ export default function Sidebar({
   isSupabaseConnected = false,
   isSyncing = false,
   onManualSync,
+  onOpenCloudModal,
 }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -232,7 +234,12 @@ export default function Sidebar({
       <div className="p-3 border-t border-[#43594A] space-y-2 bg-[#43594A]">
         {/* Live Supabase Cloud DB Status Indicator */}
         <div className="px-3 py-2 rounded-xl bg-[#3D5244] border border-[#597361] flex items-center justify-between text-[11px]">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={() => onOpenCloudModal?.()}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
+            title="Configure Supabase Cloud Database"
+          >
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               {isSupabaseConnected && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -244,14 +251,14 @@ export default function Sidebar({
               />
             </span>
             <div className="min-w-0">
-              <div className="font-semibold text-[#F5F1E8] truncate text-[11px] leading-tight">
-                {isSupabaseConnected ? 'Live DB Sync' : 'Local Offline Mode'}
+              <div className="font-semibold text-[#F5F1E8] group-hover:text-white truncate text-[11px] leading-tight flex items-center gap-1">
+                <span>{isSupabaseConnected ? 'Live DB Sync' : 'Local Offline Mode'}</span>
               </div>
               <div className="text-[9px] text-[#A3B8AA] truncate">
-                {isSupabaseConnected ? 'Real-time database updates' : 'Offline local storage'}
+                {isSupabaseConnected ? 'Real-time database updates' : 'Click to connect Supabase'}
               </div>
             </div>
-          </div>
+          </button>
 
           {onManualSync && (
             <button
