@@ -271,7 +271,14 @@ export default function InventoryView({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8EFEA]">
-              {filteredItems.map((item) => {
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-[#73897C] text-xs">
+                    No inventory items tracked yet. Click "+ Add Stock Item" to register your raw beans, dairy, or bakery supplies.
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.map((item) => {
                 const isLow = item.currentStock <= item.minThreshold;
 
                 return (
@@ -353,7 +360,8 @@ export default function InventoryView({
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

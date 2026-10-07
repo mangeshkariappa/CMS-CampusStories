@@ -16,6 +16,7 @@ import {
   Download,
   LogOut,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 
 export type AppView =
@@ -39,6 +40,9 @@ interface Props {
   onOpenInstallModal: () => void;
   onSignOut: () => void;
   activeOrdersCount: number;
+  isSupabaseConnected?: boolean;
+  isSyncing?: boolean;
+  onManualSync?: () => void;
 }
 
 export default function Sidebar({
@@ -51,6 +55,9 @@ export default function Sidebar({
   onOpenInstallModal,
   onSignOut,
   activeOrdersCount,
+  isSupabaseConnected = false,
+  isSyncing = false,
+  onManualSync,
 }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -223,6 +230,41 @@ export default function Sidebar({
 
       {/* Bottom Tool Bar: Download App + IAM Account & Sign Out */}
       <div className="p-3 border-t border-[#43594A] space-y-2 bg-[#43594A]">
+        {/* Live Supabase Cloud DB Status Indicator */}
+        <div className="px-3 py-2 rounded-xl bg-[#3D5244] border border-[#597361] flex items-center justify-between text-[11px]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              {isSupabaseConnected && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  isSupabaseConnected ? 'bg-emerald-400 shadow-xs shadow-emerald-400/50' : 'bg-amber-400'
+                }`}
+              />
+            </span>
+            <div className="min-w-0">
+              <div className="font-semibold text-[#F5F1E8] truncate text-[11px] leading-tight">
+                {isSupabaseConnected ? 'Live DB Sync' : 'Local Offline Mode'}
+              </div>
+              <div className="text-[9px] text-[#A3B8AA] truncate">
+                {isSupabaseConnected ? 'Real-time database updates' : 'Offline local storage'}
+              </div>
+            </div>
+          </div>
+
+          {onManualSync && (
+            <button
+              onClick={onManualSync}
+              disabled={isSyncing}
+              className="text-[10px] font-bold text-[#F5D8C7] hover:text-white p-1 rounded-md hover:bg-[#4C6454] flex items-center gap-1 cursor-pointer transition-colors shrink-0 ml-1"
+              title="Refresh from Supabase database"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+        </div>
+
         {/* Download App Shortcut Button */}
         <button
           onClick={() => {

@@ -38,6 +38,20 @@ const STORAGE_KEYS = {
   IS_AUTHENTICATED: 'brewpulse_is_authenticated',
 };
 
+// Automatic one-time cache purge to remove old dummy data in user browsers
+const CLEAN_STORAGE_VERSION = 'v2_clean_platform_testing';
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  try {
+    const currentVersion = localStorage.getItem('brewpulse_data_version');
+    if (currentVersion !== CLEAN_STORAGE_VERSION) {
+      Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem('brewpulse_data_version', CLEAN_STORAGE_VERSION);
+    }
+  } catch (err) {
+    console.warn('Storage migration notice:', err);
+  }
+}
+
 // Safe JSON parser
 function getStored<T>(key: string, fallback: T): T {
   try {
@@ -194,7 +208,10 @@ export class CafeStore {
 
   static getActiveStaff(): Employee {
     const stored = getStored<Employee | null>(STORAGE_KEYS.ACTIVE_STAFF, null);
-    if (stored) return stored;
+    if (stored) {
+      const match = this.getEmployees().find((e) => e.id === stored.id && e.isActive);
+      if (match) return match;
+    }
     return this.getEmployees()[0] || initialEmployees[0];
   }
 
@@ -395,7 +412,7 @@ export class CafeStore {
   }): AuditLog {
     const logs = this.getAuditLogs();
     const newEntry: AuditLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${Math.random().toString(36).substring(2, 9)}`,
       timestamp: new Date().toISOString(),
       ...entry,
     };
@@ -441,16 +458,9 @@ export class CafeStore {
     }
   }
 
-  // Reset to initial demo data
+  // Reset to clean platform data
   static resetToDemo(): void {
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
-    localStorage.removeItem(STORAGE_KEYS.MENU_ITEMS);
-    localStorage.removeItem(STORAGE_KEYS.INVENTORY);
-    localStorage.removeItem(STORAGE_KEYS.EMPLOYEES);
-    localStorage.removeItem(STORAGE_KEYS.TABLES);
-    localStorage.removeItem(STORAGE_KEYS.ORDERS);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_STAFF);
+    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
     window.location.reload();
   }
 }

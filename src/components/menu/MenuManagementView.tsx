@@ -43,7 +43,7 @@ export default function MenuManagementView({
 
   // Form states for Menu Item
   const [name, setName] = useState('');
-  const [category, setCategory] = useState(categories[0]?.id || 'cat-espresso');
+  const [category, setCategory] = useState(categories[0]?.id || 'general');
   const [price, setPrice] = useState('250');
   const [costPrice, setCostPrice] = useState('60');
   const [description, setDescription] = useState('');
@@ -266,8 +266,24 @@ export default function MenuManagementView({
       </div>
 
       {/* Grid of Menu Items */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredItems.map((item) => {
+      {filteredItems.length === 0 ? (
+        <div className="bg-white border border-[#E3DCD1] rounded-3xl p-16 text-center text-[#73897C] space-y-3 shadow-xs max-w-md mx-auto">
+          <UtensilsCrossed className="w-10 h-10 mx-auto text-[#B86B3D] opacity-70" />
+          <h3 className="font-bold text-base text-[#2D3D33]">No Dishes on the Menu Yet</h3>
+          <p className="text-xs text-[#617568]">
+            Click "+ New Dish Item" above to add your first handcrafted drink or culinary creation.
+          </p>
+          <button
+            onClick={openAddItemModal}
+            className="bg-[#B86B3D] hover:bg-[#A35C32] text-white font-bold px-4 py-2 rounded-2xl text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create First Dish</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredItems.map((item) => {
           const categoryName = categories.find((c) => c.id === item.category)?.name || item.category;
           const margin = item.price > 0 ? (((item.price - item.costPrice) / item.price) * 100).toFixed(0) : '0';
 
@@ -377,6 +393,7 @@ export default function MenuManagementView({
           );
         })}
       </div>
+    )}
 
       {/* Item Modal */}
       {isItemModalOpen && (
@@ -415,11 +432,15 @@ export default function MenuManagementView({
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full bg-white border border-[#DDD5C8] rounded-xl px-3 py-2 text-[#2D3D33] focus:outline-none focus:border-[#526B5A] font-medium"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="general">Default Category</option>
+                    ) : (
+                      categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 

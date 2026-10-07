@@ -233,23 +233,18 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
 
 -- 2. Storage Objects RLS Policies for menu-images
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Access to menu-images' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Public Access to menu-images"
-    ON storage.objects FOR SELECT
-    USING (bucket_id = 'menu-images');
-  END IF;
+DROP POLICY IF EXISTS "Public Access to menu-images" ON storage.objects;
+DROP POLICY IF EXISTS "Allow upload to menu-images" ON storage.objects;
+DROP POLICY IF EXISTS "Allow update on menu-images" ON storage.objects;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow upload to menu-images' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Allow upload to menu-images"
-    ON storage.objects FOR INSERT
-    WITH CHECK (bucket_id = 'menu-images');
-  END IF;
+CREATE POLICY "Public Access to menu-images"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'menu-images');
 
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow update on menu-images' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Allow update on menu-images"
-    ON storage.objects FOR UPDATE
-    USING (bucket_id = 'menu-images');
-  END IF;
-END $$;
+CREATE POLICY "Allow upload to menu-images"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'menu-images');
+
+CREATE POLICY "Allow update on menu-images"
+ON storage.objects FOR UPDATE
+USING (bucket_id = 'menu-images');

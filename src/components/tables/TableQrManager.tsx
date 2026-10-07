@@ -98,8 +98,24 @@ export default function TableQrManager({
       </div>
 
       {/* Grid of Table QR Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {tables.map((table) => {
+      {tables.length === 0 ? (
+        <div className="bg-white border border-[#E3DCD1] rounded-3xl p-12 text-center text-[#617568] space-y-3 shadow-xs max-w-md mx-auto">
+          <QrCode className="w-12 h-12 text-[#B86B3D] mx-auto opacity-70" />
+          <h3 className="font-bold text-base text-[#2D3D33]">No Dining Tables Created Yet</h3>
+          <p className="text-xs text-[#617568]">
+            Click the button below to add your first table (Table #1) and generate its dedicated QR code.
+          </p>
+          <button
+            onClick={() => setIsAddTableOpen(true)}
+            className="bg-[#B86B3D] hover:bg-[#A35C32] text-white font-bold px-4 py-2 rounded-2xl text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Table #1</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {tables.map((table) => {
           const qrUrl = qrCodes[table.tableNumber];
 
           return (
@@ -164,6 +180,7 @@ export default function TableQrManager({
           );
         })}
       </div>
+    )}
 
       {/* Printable Acrylic Standee Modal / Preview */}
       {selectedStandeeTable && (

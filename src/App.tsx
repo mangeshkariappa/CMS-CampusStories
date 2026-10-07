@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CafeStore } from './lib/storage';
+import { api } from './lib/api';
 import {
   CafeSettings,
   Category,
@@ -45,6 +46,10 @@ function CafeAppContent() {
   const [activeStaff, setActiveStaff] = useState<Employee>(CafeStore.getActiveStaff());
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(CafeStore.getAuditLogs());
 
+  // Cloud DB Connection State
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
   // IAM Auth & Navigation
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(CafeStore.isAuthenticated());
   const [isCustomerDirectMode, setIsCustomerDirectMode] = useState<boolean>(false);
@@ -70,6 +75,141 @@ function CafeAppContent() {
       // fallback
     }
   }, []);
+
+  // Continuous Live Sync with Supabase DB (Zero Manual Effort)
+  const syncLiveSupabase = useCallback(async (isInitial = false) => {
+    try {
+      const status = await api.checkStatus();
+      setIsSupabaseConnected(status.connected);
+
+      if (!status.connected) return;
+
+      const init = await api.initData();
+      if (!init.connected || !init.data) return;
+
+      const {
+        settings: dbSettings,
+        tables: dbTables,
+        menuItems: dbMenuItems,
+        categories: dbCategories,
+        inventory: dbInventory,
+        orders: dbOrders,
+        offers: dbOffers,
+        employees: dbEmployees,
+        auditLogs: dbLogs,
+      } = init.data;
+
+      // Check if DB is newly connected and needs auto-seeding from local store
+      if (isInitial) {
+        const localSettings = CafeStore.getSettings();
+        const localTables = CafeStore.getTables();
+        const localMenu = CafeStore.getMenuItems();
+        const localCats = CafeStore.getCategories();
+        const localInv = CafeStore.getInventory();
+        const localOrders = CafeStore.getOrders();
+        const localOffers = CafeStore.getOffers();
+        const localEmps = CafeStore.getEmployees();
+        const localLogs = CafeStore.getAuditLogs();
+
+        const needsSeed =
+          (!dbSettings && localSettings) ||
+          ((!dbMenuItems || dbMenuItems.length === 0) && localMenu.length > 0) ||
+          ((!dbCategories || dbCategories.length === 0) && localCats.length > 0) ||
+          ((!dbTables || dbTables.length === 0) && localTables.length > 0);
+
+        if (needsSeed) {
+          await api.syncAll({
+            settings: localSettings,
+            tables: localTables,
+            menuItems: localMenu,
+            categories: localCats,
+            inventory: localInv,
+            orders: localOrders,
+            offers: localOffers,
+            employees: localEmps,
+            auditLogs: localLogs,
+          });
+        }
+      }
+
+      // Live hydrate state from DB
+      if (dbSettings) {
+        CafeStore.saveSettings(dbSettings);
+        setSettings(dbSettings);
+      }
+      if (Array.isArray(dbTables)) {
+        CafeStore.saveTables(dbTables);
+        setTables(dbTables);
+      }
+      if (Array.isArray(dbMenuItems)) {
+        CafeStore.saveMenuItems(dbMenuItems);
+        setMenuItems(dbMenuItems);
+      }
+      if (Array.isArray(dbCategories)) {
+        CafeStore.saveCategories(dbCategories);
+        setCategories(dbCategories);
+      }
+      if (Array.isArray(dbInventory)) {
+        CafeStore.saveInventory(dbInventory);
+        setInventory(dbInventory);
+      }
+      if (Array.isArray(dbOrders)) {
+        CafeStore.saveOrders(dbOrders);
+        setOrders(dbOrders);
+      }
+      if (Array.isArray(dbOffers)) {
+        CafeStore.saveOffers(dbOffers);
+        setOffers(dbOffers);
+      }
+      if (Array.isArray(dbEmployees) && dbEmployees.length > 0) {
+        CafeStore.saveEmployees(dbEmployees);
+        setEmployees(dbEmployees);
+      }
+      if (Array.isArray(dbLogs)) {
+        CafeStore.saveAuditLogs(dbLogs);
+        setAuditLogs(dbLogs);
+      }
+    } catch (err) {
+      console.warn('Live Supabase sync error:', err);
+    }
+  }, []);
+
+  // Run initial sync on startup and start live continuous background polling
+  useEffect(() => {
+    // 1. Initial hydration + auto-seed
+    syncLiveSupabase(true);
+
+    // 2. Continuous real-time polling every 3.5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncLiveSupabase(false);
+      }
+    }, 3500);
+
+    // 3. Immediately re-sync on tab focus / visibility change
+    const onFocus = () => syncLiveSupabase(false);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [syncLiveSupabase]);
+
+  // On-demand refresh / sync with Supabase
+  const handleManualSync = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await syncLiveSupabase(false);
+      showToast('Database Synchronized', 'All records up to date with live Supabase database!', 'success');
+    } catch {
+      showToast('Sync Failed', 'Could not sync to Supabase.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [syncLiveSupabase, showToast]);
 
   // Listen for storage changes across tabs/components
   useEffect(() => {
@@ -102,8 +242,8 @@ function CafeAppContent() {
       setIsAuthenticated(true);
       setIsCustomerDirectMode(false);
 
-      // Record audit event
-      CafeStore.addAuditLog({
+      // Record audit event locally and in Supabase DB
+      const newLog = CafeStore.addAuditLog({
         staffId: emp.id,
         staffName: emp.name,
         staffRole: emp.role,
@@ -113,6 +253,7 @@ function CafeAppContent() {
         metadata: { username: emp.username, role: emp.role },
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       // Route strictly to first permitted view for this IAM user
       if (emp.role === 'kitchen') {
@@ -134,7 +275,7 @@ function CafeAppContent() {
 
   // IAM Sign Out handler
   const handleSignOut = useCallback(() => {
-    CafeStore.addAuditLog({
+    const logOutEntry = CafeStore.addAuditLog({
       staffId: activeStaff.id,
       staffName: activeStaff.name,
       staffRole: activeStaff.role,
@@ -143,6 +284,8 @@ function CafeAppContent() {
       details: `${activeStaff.name} logged out from terminal.`,
     });
     setAuditLogs(CafeStore.getAuditLogs());
+    api.addAuditLog(logOutEntry);
+
     CafeStore.setAuthenticated(false);
     setIsAuthenticated(false);
     setIsCustomerDirectMode(false);
@@ -157,7 +300,10 @@ function CafeAppContent() {
       setTables(CafeStore.getTables());
       setInventory(CafeStore.getInventory());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.placeOrder(newOrder);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -167,6 +313,7 @@ function CafeAppContent() {
         metadata: { orderId: newOrder.id, tableNumber: newOrder.tableNumber, total: newOrder.total },
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast(
         `Order ${newOrder.orderNumber} Placed!`,
@@ -183,7 +330,10 @@ function CafeAppContent() {
       setOrders(CafeStore.getOrders());
       setTables(CafeStore.getTables());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.updateOrderStatus(orderId, status);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -193,6 +343,7 @@ function CafeAppContent() {
         metadata: { orderId, status },
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Order Status Updated', `Order marked as ${status}`, 'info');
     },
@@ -221,7 +372,11 @@ function CafeAppContent() {
         setOrders(CafeStore.getOrders());
         setTables(CafeStore.getTables());
 
-        CafeStore.addAuditLog({
+        // Persist completed order & table status to Supabase Database
+        api.placeOrder(completed);
+        api.updateTableStatus(completed.tableNumber, 'available', undefined);
+
+        const newLog = CafeStore.addAuditLog({
           staffId: activeStaff.id,
           staffName: activeStaff.name,
           staffRole: activeStaff.role,
@@ -236,6 +391,7 @@ function CafeAppContent() {
           },
         });
         setAuditLogs(CafeStore.getAuditLogs());
+        api.addAuditLog(newLog);
 
         showToast(
           'Bill Settled & Completed',
@@ -249,7 +405,12 @@ function CafeAppContent() {
 
   const handleRecordWhatsAppSent = useCallback((orderId: string) => {
     CafeStore.recordWhatsAppSent(orderId);
-    setOrders(CafeStore.getOrders());
+    const updated = CafeStore.getOrders();
+    setOrders(updated);
+    const target = updated.find((o) => o.id === orderId);
+    if (target) {
+      api.placeOrder(target);
+    }
   }, []);
 
   // Handlers for Inventory
@@ -258,7 +419,10 @@ function CafeAppContent() {
       CafeStore.addInventoryItem(item);
       setInventory(CafeStore.getInventory());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveInventoryItem(item);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -267,6 +431,7 @@ function CafeAppContent() {
         details: `Added ${item.name} (${item.currentStock} ${item.unit})`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Stock Item Added', item.name, 'success');
     },
@@ -278,7 +443,10 @@ function CafeAppContent() {
       CafeStore.updateInventoryItem(item);
       setInventory(CafeStore.getInventory());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveInventoryItem(item);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -287,6 +455,7 @@ function CafeAppContent() {
         details: `Updated ${item.name} stock: ${item.currentStock} ${item.unit}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Stock Item Updated', item.name, 'info');
     },
@@ -298,7 +467,10 @@ function CafeAppContent() {
       CafeStore.adjustStock(id, amount);
       setInventory(CafeStore.getInventory());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.adjustStock(id, amount);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -307,6 +479,7 @@ function CafeAppContent() {
         details: `Adjusted stock by ${amount > 0 ? '+' : ''}${amount} for item ${id}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
     },
     [activeStaff]
   );
@@ -316,7 +489,10 @@ function CafeAppContent() {
       CafeStore.deleteInventoryItem(id);
       setInventory(CafeStore.getInventory());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.deleteInventoryItem(id);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -325,6 +501,7 @@ function CafeAppContent() {
         details: `Removed stock item ${id}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Stock Item Removed', undefined, 'info');
     },
@@ -337,7 +514,10 @@ function CafeAppContent() {
       CafeStore.addMenuItem(item);
       setMenuItems(CafeStore.getMenuItems());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveMenuItem(item);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -346,6 +526,7 @@ function CafeAppContent() {
         details: `Created menu dish "${item.name}" (${settings.currencySymbol}${item.price.toFixed(2)})`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Dish Added to Menu', item.name, 'success');
     },
@@ -357,7 +538,10 @@ function CafeAppContent() {
       CafeStore.updateMenuItem(item);
       setMenuItems(CafeStore.getMenuItems());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveMenuItem(item);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -366,6 +550,7 @@ function CafeAppContent() {
         details: `Updated "${item.name}" price: ${settings.currencySymbol}${item.price.toFixed(2)}, available: ${item.isAvailable}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Dish Updated', item.name, 'info');
     },
@@ -377,7 +562,10 @@ function CafeAppContent() {
       CafeStore.deleteMenuItem(id);
       setMenuItems(CafeStore.getMenuItems());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.deleteMenuItem(id);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -386,6 +574,7 @@ function CafeAppContent() {
         details: `Removed dish ${id} from menu`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Dish Removed from Menu', undefined, 'info');
     },
@@ -399,7 +588,10 @@ function CafeAppContent() {
       CafeStore.saveCategories(cats);
       setCategories(cats);
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveCategory(category);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -408,6 +600,7 @@ function CafeAppContent() {
         details: `Created category "${category.name}"`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Category Created', category.name, 'success');
     },
@@ -420,7 +613,10 @@ function CafeAppContent() {
       CafeStore.addEmployee(emp);
       setEmployees(CafeStore.getEmployees());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveEmployee(emp);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -429,6 +625,7 @@ function CafeAppContent() {
         details: `Created staff user "${emp.username}" (${emp.name}) with role ${emp.role.toUpperCase()}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Employee Account Created', `${emp.name} (${emp.role})`, 'success');
     },
@@ -444,7 +641,10 @@ function CafeAppContent() {
         setActiveStaff(emp);
       }
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveEmployee(emp);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -453,6 +653,7 @@ function CafeAppContent() {
         details: `Updated permissions/status for "${emp.name}" (${emp.role})`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Credentials & Policies Updated', emp.name, 'info');
     },
@@ -464,7 +665,10 @@ function CafeAppContent() {
       CafeStore.deleteEmployee(id);
       setEmployees(CafeStore.getEmployees());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.deleteEmployee(id);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -473,6 +677,7 @@ function CafeAppContent() {
         details: `Deleted employee profile ${id}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Employee Account Removed', undefined, 'info');
     },
@@ -484,7 +689,7 @@ function CafeAppContent() {
       CafeStore.setActiveStaff(emp);
       setActiveStaff(emp);
 
-      CafeStore.addAuditLog({
+      const newLog = CafeStore.addAuditLog({
         staffId: emp.id,
         staffName: emp.name,
         staffRole: emp.role,
@@ -493,6 +698,7 @@ function CafeAppContent() {
         details: `Switched terminal session to ${emp.name} (${emp.role.toUpperCase()})`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Switched Account', `Logged in as ${emp.name} (${emp.role.toUpperCase()})`, 'success');
     },
@@ -505,7 +711,10 @@ function CafeAppContent() {
       CafeStore.addTable(tbl);
       setTables(CafeStore.getTables());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveTable(tbl);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -514,6 +723,7 @@ function CafeAppContent() {
         details: `Created Table #${tbl.tableNumber} in ${tbl.section}`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Table Created', `Table #${tbl.tableNumber}`, 'success');
     },
@@ -524,6 +734,9 @@ function CafeAppContent() {
     (tableNumber: number, status: CafeTable['status']) => {
       CafeStore.updateTableStatus(tableNumber, status);
       setTables(CafeStore.getTables());
+
+      // Persist to Supabase Database
+      api.updateTableStatus(tableNumber, status);
     },
     []
   );
@@ -534,7 +747,10 @@ function CafeAppContent() {
       CafeStore.addOffer(offer);
       setOffers(CafeStore.getOffers());
 
-      CafeStore.addAuditLog({
+      // Persist to Supabase Database
+      api.saveOffer(offer);
+
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -543,6 +759,7 @@ function CafeAppContent() {
         details: `Created offer "${offer.title}" (${offer.badgeText})`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('Offer Created', offer.title, 'success');
     },
@@ -553,6 +770,10 @@ function CafeAppContent() {
     (offer: SpecialOffer) => {
       CafeStore.updateOffer(offer);
       setOffers(CafeStore.getOffers());
+
+      // Persist to Supabase Database
+      api.saveOffer(offer);
+
       showToast('Offer Updated', offer.title, 'info');
     },
     [showToast]
@@ -562,6 +783,10 @@ function CafeAppContent() {
     (id: string) => {
       CafeStore.deleteOffer(id);
       setOffers(CafeStore.getOffers());
+
+      // Persist to Supabase Database
+      api.deleteOffer(id);
+
       showToast('Offer Removed', undefined, 'info');
     },
     [showToast]
@@ -570,9 +795,14 @@ function CafeAppContent() {
   const handleRecordBroadcastSent = useCallback(
     (offerId: string, count: number) => {
       CafeStore.incrementBroadcastCount(offerId, count);
-      setOffers(CafeStore.getOffers());
+      const updated = CafeStore.getOffers();
+      setOffers(updated);
+      const target = updated.find((o) => o.id === offerId);
+      if (target) {
+        api.saveOffer(target);
+      }
 
-      CafeStore.addAuditLog({
+      const newLog = CafeStore.addAuditLog({
         staffId: activeStaff.id,
         staffName: activeStaff.name,
         staffRole: activeStaff.role,
@@ -581,6 +811,7 @@ function CafeAppContent() {
         details: `Delivered broadcast for offer ${offerId} to ${count} customers`,
       });
       setAuditLogs(CafeStore.getAuditLogs());
+      api.addAuditLog(newLog);
 
       showToast('WhatsApp Broadcast Dispatched', `Broadcast delivered to ${count} customer(s)!`, 'success');
     },
@@ -627,6 +858,9 @@ function CafeAppContent() {
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onSignOut={handleSignOut}
         activeOrdersCount={activeOrdersCount}
+        isSupabaseConnected={isSupabaseConnected}
+        isSyncing={isSyncing}
+        onManualSync={handleManualSync}
       />
 
       {/* Main Content Area with Strict IAM Policy Enforcement */}
