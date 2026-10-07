@@ -1,0 +1,6 @@
+{
+  "name": "BrewPulse - Smart Cafe Management & QR Table Ordering",
+  "description": "Complete cafe operating system with QR table ordering, IAM user access policies, PWA app shortcut, WhatsApp billing, inventory tracking, and owner audit logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

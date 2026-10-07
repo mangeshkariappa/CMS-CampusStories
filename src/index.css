@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F5F1E8;
+    color: #2D3D33;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom scrollbars for Theme 4: Sage & Coffee (#F5F1E8 Soft Cream, #526B5A Sage Green, #B86B3D Coffee Orange) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F1E8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5CE;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #526B5A;
+}
+
+/* Print Styles for POS Thermal Receipts and Table QR Standees */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  aside, nav, .print\:hidden, header {
+    display: none !important;
+  }
+
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}
