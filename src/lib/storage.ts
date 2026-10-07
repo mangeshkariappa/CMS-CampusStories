@@ -436,11 +436,11 @@ export class CafeStore {
     setStored(STORAGE_KEYS.IS_AUTHENTICATED, status);
   }
 
-  // QR Code generator helper
-  static async generateTableQrDataUrl(tableNumber: number, baseUrl?: string): Promise<string> {
-    const origin = baseUrl || window.location.origin;
-    // URL with table parameter
-    const tableUrl = `${origin}?table=${tableNumber}`;
+  // QR Code generator helper - strictly points to deployed platform: https://cmscafe.netlify.app/
+  static async generateTableQrDataUrl(tableNumber: number, baseUrl: string = 'https://cmscafe.netlify.app'): Promise<string> {
+    const origin = (baseUrl || 'https://cmscafe.netlify.app').replace(/\/+$/, '');
+    // URL with table parameter: https://cmscafe.netlify.app/?table=X
+    const tableUrl = `${origin}/?table=${tableNumber}`;
     try {
       const dataUrl = await QRCode.toDataURL(tableUrl, {
         width: 320,

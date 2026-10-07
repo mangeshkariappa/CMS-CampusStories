@@ -10,6 +10,9 @@ import {
   Sparkles,
   Wifi,
   X,
+  Copy,
+  Check,
+  Globe,
 } from 'lucide-react';
 
 interface Props {
@@ -18,6 +21,8 @@ interface Props {
   onAddTable: (table: CafeTable) => void;
   onSelectTableForMenu: (tableNumber: number) => void;
 }
+
+const DEPLOYED_BASE_URL = 'https://cmscafe.netlify.app';
 
 export default function TableQrManager({
   tables,
@@ -31,19 +36,29 @@ export default function TableQrManager({
   const [newTableNum, setNewTableNum] = useState(tables.length + 1);
   const [newSection, setNewSection] = useState('Patio & Garden');
   const [newCapacity, setNewCapacity] = useState('4');
+  const [copiedTable, setCopiedTable] = useState<number | null>(null);
 
-  // Generate QR codes for all tables
+  // Generate QR codes for all tables using the deployed URL
   useEffect(() => {
     async function loadQrCodes() {
       const generated: Record<number, string> = {};
       for (const tbl of tables) {
-        const url = await CafeStore.generateTableQrDataUrl(tbl.tableNumber);
+        const url = await CafeStore.generateTableQrDataUrl(tbl.tableNumber, DEPLOYED_BASE_URL);
         generated[tbl.tableNumber] = url;
       }
       setQrCodes(generated);
     }
     loadQrCodes();
   }, [tables]);
+
+  const handleCopyLink = (tableNumber: number) => {
+    const link = `${DEPLOYED_BASE_URL}/?table=${tableNumber}`;
+    navigator.clipboard.writeText(link);
+    setCopiedTable(tableNumber);
+    setTimeout(() => {
+      setCopiedTable(null);
+    }, 2000);
+  };
 
   const handleCreateNewTable = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +110,37 @@ export default function TableQrManager({
             <span>Add Table</span>
           </button>
         </div>
+      </div>
+
+      {/* Deployed Platform URL Banner */}
+      <div className="bg-[#E7EDE8] border border-[#BACCC0] rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#526B5A] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Globe className="w-4 h-4 text-[#F5D8C7]" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#2D3D33]">Live QR Target Domain:</span>
+              <span className="font-mono text-xs font-bold text-[#526B5A] bg-white px-2 py-0.5 rounded-md border border-[#BACCC0]">
+                {DEPLOYED_BASE_URL}
+              </span>
+            </div>
+            <p className="text-[11px] text-[#617568] mt-0.5">
+              All table standee QR codes are strictly generated for{' '}
+              <code className="text-[#2D3D33] font-semibold">{DEPLOYED_BASE_URL}/?table=X</code> for live contactless ordering on Netlify.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href={DEPLOYED_BASE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-bold text-[#526B5A] hover:text-[#3D5244] bg-white border border-[#BACCC0] px-3 py-1.5 rounded-xl flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-2xs transition-colors"
+        >
+          <span>Visit Live App</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
 
       {/* Grid of Table QR Cards */}
@@ -152,20 +198,49 @@ export default function TableQrManager({
               </div>
 
               <div className="w-full space-y-2">
-                <div className="text-[11px] text-[#617568] font-medium">
+                {/* Live Link Badge + Copy Button */}
+                <div className="w-full text-left space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-[#617568]">
+                    <span className="font-medium">Live Order URL:</span>
+                    <button
+                      onClick={() => handleCopyLink(table.tableNumber)}
+                      className="text-[#B86B3D] hover:text-[#9A5429] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Copy live QR URL"
+                    >
+                      {copiedTable === table.tableNumber ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-600 font-bold">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy Link</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="font-mono text-[10px] bg-[#F5F1E8] border border-[#DDD5C8] px-2 py-1 rounded-lg text-[#2D3D33] truncate">
+                    {DEPLOYED_BASE_URL}/?table={table.tableNumber}
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-[#617568] font-medium pt-0.5">
                   Seating Capacity: {table.capacity} Guests
                 </div>
 
                 {/* Actions */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    onClick={() => onSelectTableForMenu(table.tableNumber)}
+                  <a
+                    href={`${DEPLOYED_BASE_URL}/?table=${table.tableNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="bg-[#526B5A] hover:bg-[#43594A] text-white font-bold py-1.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
-                    title="Simulate scanning this table's QR"
+                    title="Open live customer menu for this table"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open Menu</span>
-                  </button>
+                    <span>Live Menu</span>
+                  </a>
 
                   <button
                     onClick={() => setSelectedStandeeTable(table)}
@@ -226,8 +301,19 @@ export default function TableQrManager({
                 <p className="text-xs text-[#617568] mt-0.5 font-medium">
                   {selectedStandeeTable.section} · Dedicated Table QR
                 </p>
-                <div className="inline-block mt-1 font-mono text-[10px] bg-[#F5F1E8] border border-[#DDD5C8] px-2 py-0.5 rounded text-[#2D3D33]">
-                  URL: ?table={selectedStandeeTable.tableNumber}
+                <div className="inline-flex items-center gap-1.5 mt-1 font-mono text-[10px] bg-[#F5F1E8] border border-[#DDD5C8] px-2.5 py-1 rounded-lg text-[#2D3D33] font-bold break-all">
+                  <span>{DEPLOYED_BASE_URL}/?table={selectedStandeeTable.tableNumber}</span>
+                  <button
+                    onClick={() => handleCopyLink(selectedStandeeTable.tableNumber)}
+                    className="print:hidden p-0.5 text-[#B86B3D] hover:text-[#9A5429] cursor-pointer"
+                    title="Copy QR Link"
+                  >
+                    {copiedTable === selectedStandeeTable.tableNumber ? (
+                      <Check className="w-3 h-3 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
                 </div>
               </div>
 

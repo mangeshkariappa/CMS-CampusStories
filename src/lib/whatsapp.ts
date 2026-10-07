@@ -170,8 +170,8 @@ export function generateWhatsAppOfferBroadcastText(
     message += `📅 *Validity:* ${offer.validUntil}\n`;
   }
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://brewpulse.cafe';
-  message += `\n📲 *Browse Menu & Reserve Table:* ${appUrl}?table=1\n`;
+  const appUrl = 'https://cmscafe.netlify.app';
+  message += `\n📲 *Browse Menu & Reserve Table:* ${appUrl}/?table=1\n`;
   message += `📍 ${settings.address}\n\n`;
   message += `Show this WhatsApp message to our barista or mention code *${offer.badgeText.replace(/[^A-Z0-9]/gi, '')}* to redeem! ❤️\n`;
   message += `_Reply STOP to opt out of promotional messages._`;
